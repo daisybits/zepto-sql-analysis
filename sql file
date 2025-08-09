@@ -1,0 +1,149 @@
+-- =========================================
+-- Project: Zepto SQL Data Analysis
+-- Database: zepto_SQL_project
+-- Author: Daisy Francis
+-- Description:
+--   This script creates the Zepto product table,
+--   loads and cleans data, and performs exploratory
+--   and analytical queries for insights.
+-- =========================================
+
+-- ========================
+-- 1. DROP & CREATE TABLE
+-- ========================
+DROP TABLE IF EXISTS zepto;
+
+CREATE TABLE zepto (
+    sku_id SERIAL PRIMARY KEY,             -- Unique product identifier (auto-increment)
+    category VARCHAR(120),                  -- Product category
+    name VARCHAR(150) NOT NULL,              -- Product name
+    mrp NUMERIC(8,2),                        -- Maximum Retail Price
+    discountPercent NUMERIC(5,2),            -- Discount percentage
+    availableQuantity INTEGER,               -- Available stock quantity
+    discountedSellingPrice NUMERIC(8,2),     -- Selling price after discount
+    weightInGms INTEGER,                     -- Product weight in grams
+    outOfStock BOOLEAN,                      -- Stock status (TRUE = Out of stock)
+    quantity INTEGER                          -- Quantity in units
+);
+
+-- ========================
+-- 2. DATA EXPLORATION
+-- ========================
+
+-- Count total number of rows
+SELECT COUNT(*) FROM zepto;
+
+-- View a sample of 10 rows
+SELECT * FROM zepto
+LIMIT 10;
+
+-- Identify rows with NULL values in important columns
+SELECT * FROM zepto
+WHERE name IS NULL
+   OR category IS NULL
+   OR mrp IS NULL
+   OR discountPercent IS NULL
+   OR discountedSellingPrice IS NULL
+   OR weightInGms IS NULL
+   OR availableQuantity IS NULL
+   OR outOfStock IS NULL
+   OR quantity IS NULL;
+
+-- Get distinct product categories
+SELECT DISTINCT category
+FROM zepto
+ORDER BY category;
+
+-- Count products in stock vs out of stock
+SELECT outOfStock, COUNT(sku_id) AS product_count
+FROM zepto
+GROUP BY outOfStock;
+
+-- Identify products listed multiple times (duplicate names)
+SELECT name, COUNT(sku_id) AS "Number of SKUs"
+FROM zepto
+GROUP BY name
+HAVING COUNT(sku_id) > 1
+ORDER BY COUNT(sku_id) DESC;
+
+-- ========================
+-- 3. DATA CLEANING
+-- ========================
+
+-- Find products with MRP = 0 or Selling Price = 0
+SELECT * FROM zepto
+WHERE mrp = 0 OR discountedSellingPrice = 0;
+
+-- Remove products with invalid MRP (0 value)
+DELETE FROM zepto
+WHERE mrp = 0;
+
+-- Convert MRP and Selling Price from paise to rupees
+UPDATE zepto
+SET mrp = mrp / 100.0,
+    discountedSellingPrice = discountedSellingPrice / 100.0;
+
+-- Verify updated prices
+SELECT mrp, discountedSellingPrice FROM zepto;
+
+-- ========================
+-- 4. DATA ANALYSIS
+-- ========================
+
+-- Q1: Top 10 best-value products by discount percentage
+SELECT DISTINCT name, mrp, discountPercent
+FROM zepto
+ORDER BY discountPercent DESC
+LIMIT 10;
+
+-- Q2: Products with High MRP (> ₹300) but Out of Stock
+SELECT DISTINCT name, mrp
+FROM zepto
+WHERE outOfStock = TRUE
+  AND mrp > 300
+ORDER BY mrp DESC;
+
+-- Q3: Estimated Revenue per category
+SELECT category,
+       SUM(discountedSellingPrice * availableQuantity) AS total_revenue
+FROM zepto
+GROUP BY category
+ORDER BY total_revenue DESC;
+
+-- Q4: Products with MRP > ₹500 and discount < 10%
+SELECT DISTINCT name, mrp, discountPercent
+FROM zepto
+WHERE mrp > 500
+  AND discountPercent < 10
+ORDER BY mrp DESC, discountPercent DESC;
+
+-- Q5: Top 5 categories with highest average discount
+SELECT category,
+       ROUND(AVG(discountPercent), 2) AS avg_discount
+FROM zepto
+GROUP BY category
+ORDER BY avg_discount DESC
+LIMIT 5;
+
+-- Q6: Price per gram for products > 100g, sorted by best value
+SELECT DISTINCT name, weightInGms, discountedSellingPrice,
+       ROUND(discountedSellingPrice / weightInGms, 2) AS price_per_gram
+FROM zepto
+WHERE weightInGms >= 100
+ORDER BY price_per_gram;
+
+-- Q7: Categorize products into Low, Medium, Bulk based on weight
+SELECT DISTINCT name, weightInGms,
+       CASE
+           WHEN weightInGms < 1000 THEN 'Low'
+           WHEN weightInGms < 5000 THEN 'Medium'
+           ELSE 'Bulk'
+       END AS weight_category
+FROM zepto;
+
+-- Q8: Total Inventory Weight per category
+SELECT category,
+       SUM(weightInGms * availableQuantity) AS total_weight
+FROM zepto
+GROUP BY category
+ORDER BY total_weight DESC;
